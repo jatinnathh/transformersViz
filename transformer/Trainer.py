@@ -104,7 +104,7 @@ class Trainer:
                 seq_tensor = torch.tensor(batch, dtype=torch.long).to(self.device)
 
                 # Mask: 1 for real tokens, 0 for padding
-                mask = (seq_tensor != pad_id).long()
+                mask = (seq_tensor != pad_id)
 
                 # Forward
                 logits, targets = self.model(seq_tensor, mask)

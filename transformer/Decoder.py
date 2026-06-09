@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from MaskedMultiHeadAttention import MaskedMultiHeadedAttention
+from MaskedMultiheadAttention import MaskedMultiHeadedAttention
 from FeedForward import FeedForward
-
+# decodeer
 
 class DecoderLayer(nn.Module):
     """

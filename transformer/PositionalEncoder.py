@@ -53,19 +53,15 @@ class RotatoryPositionalEmbedding(nn.Module):
         Applies RoPE rotation to a tensor x of shape (batch, seq_len, d_model).
         Call this on both your query and key tensors before computing attention.
         """
-        seq_len = x.size(1)
-        cos = self.cos_cache[:seq_len]          # (seq_len, d_model/2)
-        sin = self.sin_cache[:seq_len]          # (seq_len, d_model/2)
+        seq_len = x.size(-2)
+        cos = torch.cat([self.cos_cached[:seq_len],
+                        self.cos_cached[:seq_len]], dim=-1).to(x.device)  # ← add .to(x.device)
+        sin = torch.cat([self.sin_cached[:seq_len],
+                        self.sin_cached[:seq_len]], dim=-1).to(x.device)  # ← add .to(x.device)
 
-        # Interleave cos/sin to match the full d_model dimension
-        cos = torch.cat([cos, cos], dim=-1)     # (seq_len, d_model)
-        sin = torch.cat([sin, sin], dim=-1)     # (seq_len, d_model)
+        cos = cos.unsqueeze(0).unsqueeze(0)
+        sin = sin.unsqueeze(0).unsqueeze(0)
 
-        # Broadcast over batch dimension: (1, seq_len, d_model)
-        cos = cos.unsqueeze(0)
-        sin = sin.unsqueeze(0)
-
-        # x*cos + rotate_half(x)*sin  —  the rotary embedding formula
         return x * cos + self._rotate_half(x) * sin
 
     def forward(self, x):

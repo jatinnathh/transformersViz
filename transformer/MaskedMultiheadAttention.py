@@ -1,15 +1,16 @@
 import torch
 import torch.nn as nn
-from positionalencoder import RotatoryPositionalEmbedding
+import math
+from PositionalEncoder import RotatoryPositionalEmbedding
 class MaskedMultiHeadedAttention(nn.Module):
-    def __init__(self,rope,embedding_dimension,number_of_heads,dropout=0.1):
-        self.rope = RotatoryPositionalEmbedding(self.head_dimension)
+    def __init__(self,embedding_dimension,number_of_heads,dropout=0.1):
         super().__init__()
         assert embedding_dimension % number_of_heads == 0, \
                 "embedding_dimension must be divisible by number_of_heads"
         self.embedding_dim=embedding_dimension
         self.number_of_heads=number_of_heads
         self.head_dimension=embedding_dimension//number_of_heads
+        self.rope = RotatoryPositionalEmbedding(self.head_dimension)
 
         # Single projection for all heads at once
         self.query_layer = torch.nn.Linear(embedding_dimension, embedding_dimension)
@@ -51,7 +52,8 @@ class MaskedMultiHeadedAttention(nn.Module):
 
         # Padding mask: (batch, 1, 1, seq_len) broadcasts over heads and query positions
         if mask is not None:
-            weights = weights.masked_fill(mask.unsqueeze(1).unsqueeze(2) == 0, -1e9)
+            weights = weights.masked_fill(~mask.unsqueeze(1).unsqueeze(2), -1e9)
+
 
         scores = self.dropout(torch.softmax(weights, dim=-1))
 

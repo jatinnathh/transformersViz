@@ -25,7 +25,7 @@ class LMHead(nn.Module):
         Call this once after constructing the full model:
             lm_head.tie_weights(token_embedding.embedding.weight)
         """
-        self.projection.weight = embedding_weight
+        self.projection.weight = nn.Parameter(embedding_weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

@@ -17,7 +17,7 @@ class FeedForward(nn.Module):
         if feed_forward_dimension is None:
             feed_forward_dimension = int(2/3 * 4 * embedding_dimension)
             # Round to nearest multiple of 256 for hardware efficiency
-            feed_forward_dimension = 256 * ((feed_forward_dimension + 255) // 256)
+            feed_forward_dimension = 64 * ((feed_forward_dimension + 63) // 64)
 
         self.w1 = nn.Linear(embedding_dimension, feed_forward_dimension, bias=False)
         self.w2 = nn.Linear(feed_forward_dimension, embedding_dimension, bias=False)

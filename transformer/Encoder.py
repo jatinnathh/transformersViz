@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from MaskedMultiHeadAttention import MaskedMultiHeadedAttention
+from MaskedMultiheadAttention import MaskedMultiHeadedAttention
 from FeedForward import FeedForward
-from tokenizer import TokenEmbedding
+from TokenEmbedding import TokenEmbedding
 class TransformerEncoderLayer(nn.Module):
     """
     Single transformer encoder layer.

@@ -24,21 +24,17 @@ def pad_right(sequence: List[int], final_length: int, padding_token: int) -> Lis
     return sequence[:final_length] + [padding_token] * max(pad_len, 0)
 
 
+# In utils.py — add a stride parameter
 def create_training_sequences(
     tokenized_data: List[int],
-    max_sequence_length: int
+    max_sequence_length: int,
+    stride: int = 32          # ← step between sequence starts
 ) -> List[List[int]]:
-    """
-    Sliding window over tokenized data.
-    Each sequence is (max_sequence_length + 1) tokens:
-    input = seq[:-1], target = seq[1:]  — handled by AutoregressiveWrapper.
-    """
     sequences = []
     window = max_sequence_length + 1
-    for i in range(len(tokenized_data) - window):
+    for i in range(0, len(tokenized_data) - window, stride):  # ← stride here
         sequences.append(tokenized_data[i : i + window])
     return sequences
-
 
 def tokenize_and_pad_training_data(
     training_data: str,
