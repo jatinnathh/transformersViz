@@ -1,8 +1,9 @@
-/* eslint-disable */
-import React, { useState, useEffect } from 'react';
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
-import { motion, useReducedMotion } from 'framer-motion';
-import { Send, Loader2, Info } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { TransformerVizProps, PipelineStage } from './types';
 import { PipelineCanvas } from './PipelineCanvas';
 import { DetailPanel } from './DetailPanel';
@@ -10,8 +11,19 @@ import { AttentionHeatmap } from './AttentionHeatmap';
 import { AttentionArcView } from './AttentionArcView';
 import { EmbeddingPlot } from './EmbeddingPlot';
 import { GenerationView } from './GenerationView';
+import { usePipelineFlow } from './hooks/usePipelineFlow';
+import { joinTokens } from './utils/tokenFormat';
 
-export const TransformerViz: React.FC<TransformerVizProps & { onGenerate: (text: string) => void }> = ({
+const TAB_ITEMS = [
+  { id: 'pipeline', label: 'Pipeline' },
+  { id: 'attention', label: 'Attention' },
+  { id: 'embeddings', label: 'Embeddings' },
+  { id: 'generation', label: 'Generation' },
+] as const;
+
+export const TransformerViz: React.FC<
+  TransformerVizProps & { onGenerate: (text: string) => void }
+> = ({
   inputText: initialInput,
   tokens,
   tokenIds,
@@ -20,27 +32,65 @@ export const TransformerViz: React.FC<TransformerVizProps & { onGenerate: (text:
   attentionWeights,
   topKPredictions,
   generatedTokens,
+  generatedText,
   isGenerating,
   stageTiming,
-  onGenerate
+  stageDecisions,
+  onGenerate,
 }) => {
   const [inputText, setInputText] = useState(initialInput || '');
   const [activeTab, setActiveTab] = useState('pipeline');
   const [selectedStage, setSelectedStage] = useState<PipelineStage | null>(null);
   const [attentionViewType, setAttentionViewType] = useState<'2d' | '3d'>('2d');
-  
-  const shouldReduceMotion = useReducedMotion();
 
-  // Keyboard navigation for stages
+  const shouldReduceMotion = useReducedMotion();
+  const hasAutoOpenedPanel = useRef(false);
+
+  const { flowState } = usePipelineFlow({
+    tokens,
+    isGenerating,
+    stageTiming,
+    stageDecisions,
+  });
+
+  // Auto-follow active stage during inference
+  useEffect(() => {
+    if (flowState.isFlowing && flowState.activeStage) {
+      setSelectedStage(flowState.activeStage);
+    }
+  }, [flowState.isFlowing, flowState.activeStage]);
+
+  // Open tokenizer panel once when first results arrive
+  useEffect(() => {
+    if (!isGenerating && tokens.length > 0 && !hasAutoOpenedPanel.current) {
+      setSelectedStage('tokenizer');
+      hasAutoOpenedPanel.current = true;
+    }
+    if (tokens.length === 0) {
+      hasAutoOpenedPanel.current = false;
+    }
+  }, [isGenerating, tokens.length]);
+
+  const displayOutput =
+    generatedText ?? joinTokens(generatedTokens);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-      
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA'
+      )
+        return;
+
       const keyMap: Record<string, PipelineStage> = {
-        '1': 'tokenizer', '2': 'embedding', '3': 'positional',
-        '4': 'encoder', '5': 'decoder', '6': 'output'
+        '1': 'tokenizer',
+        '2': 'embedding',
+        '3': 'positional',
+        '4': 'encoder',
+        '5': 'decoder',
+        '6': 'output',
       };
-      
+
       if (keyMap[e.key]) {
         setSelectedStage(keyMap[e.key]);
         setActiveTab('pipeline');
@@ -49,7 +99,7 @@ export const TransformerViz: React.FC<TransformerVizProps & { onGenerate: (text:
         onGenerate(inputText);
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [inputText, isGenerating, onGenerate]);
@@ -62,149 +112,215 @@ export const TransformerViz: React.FC<TransformerVizProps & { onGenerate: (text:
   };
 
   const currentData = {
-    tokens, 
+    tokens,
     tokenIds,
-    embeddings, 
+    embeddings,
     positionalEncodings,
-    attentionWeights, 
+    attentionWeights,
     topKPredictions,
     generatedTokens,
-    stageTiming
+    stageTiming,
+    stageDecisions,
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#050508] text-white overflow-hidden relative font-body selection:bg-blue-500/30 selection:text-blue-200">
-      
-      {/* Background blueprint grid */}
-      <div 
-        className="absolute inset-0 pointer-events-none opacity-50"
+    <div className="min-h-screen w-full bg-[#09090b] text-zinc-100 overflow-hidden relative selection:bg-white/10">
+      {/* Subtle radial gradient */}
+      <div
+        className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: 'linear-gradient(rgba(59,130,246,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.08) 1px, transparent 1px)',
-          backgroundSize: '100px 100px',
-          backgroundPosition: 'center center'
+          background:
+            'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255,255,255,0.04), transparent)',
         }}
       />
 
       <div className="relative z-10 flex flex-col h-screen max-h-screen">
-        
-        {/* HEADER */}
-        <motion.header 
-          initial={{ opacity: 0, y: -20 }}
+        {/* Header */}
+        <motion.header
+          initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: shouldReduceMotion ? 0 : 0.5 }}
-          className="flex-none p-6 pb-2"
+          transition={{ duration: shouldReduceMotion ? 0 : 0.4, ease: [0.22, 1, 0.36, 1] }}
+          className="flex-none px-6 pt-6 pb-3"
         >
-          <div className="max-w-7xl mx-auto">
-            <div className="bg-[rgba(12,14,28,0.75)] backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl flex flex-col md:flex-row items-center gap-4">
-              <div className="flex-1 w-full relative">
-                <form onSubmit={handleSubmit} className="relative flex items-center">
-                  <input
-                    type="text"
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Enter sequence to process..."
-                    className="w-full bg-black/40 border border-white/5 focus:border-blue-500/50 rounded-xl px-4 py-3 text-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
-                    disabled={isGenerating}
-                  />
-                  {tokens.length > 0 && (
-                    <div className="absolute right-4 px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-md font-mono border border-blue-500/30">
-                      {tokens.length} tokens
-                    </div>
-                  )}
-                </form>
-              </div>
-              <button
-                onClick={handleSubmit}
-                disabled={isGenerating || !inputText.trim()}
-                className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 disabled:from-zinc-800 disabled:to-zinc-800 text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:text-zinc-500 shadow-[0_0_20px_rgba(59,130,246,0.3)] disabled:shadow-none whitespace-nowrap"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-5 h-5" />
-                    Generate
-                  </>
+          <div className="max-w-[1400px] mx-auto">
+            <div className="flex flex-col gap-3">
+              {/* Title row */}
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <h1 className="text-sm font-medium text-zinc-100 tracking-tight">
+                    Transformer Inspector
+                  </h1>
+                  <p className="text-[11px] text-zinc-600 mt-0.5">
+                    Real-time inference visualization
+                  </p>
+                </div>
+                {tokens.length > 0 && (
+                  <span className="text-[10px] font-mono text-zinc-500 tabular-nums">
+                    {tokens.length} tokens processed
+                  </span>
                 )}
-              </button>
-            </div>
+              </div>
 
-            {/* Generated Output Strip */}
-            {(generatedTokens.length > 0 || isGenerating) && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
-                className="p-4 bg-blue-900/20 backdrop-blur-md border border-blue-500/20 rounded-xl text-blue-50 font-mono text-sm leading-relaxed"
+              {/* Input */}
+              <form
+                onSubmit={handleSubmit}
+                className="flex items-center gap-3 bg-white/[0.02] border border-white/[0.06] rounded-xl p-1.5 pl-4 backdrop-blur-xl"
               >
-                 <span className="text-blue-400 font-bold mr-3 font-display tracking-wider uppercase text-xs">Output</span>
-                 <span className="opacity-90">
-                   {generatedTokens.map(t => t === ' ' ? '\u00A0' : t).join('')}
-                 </span>
-                 {isGenerating && (
-                   <span className="inline-block w-2 bg-blue-400 ml-1 h-[1.2em] translate-y-1 animate-pulse" />
-                 )}
-              </motion.div>
-            )}
+                <input
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Enter text to analyze..."
+                  className="flex-1 bg-transparent text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none py-2"
+                  disabled={isGenerating}
+                />
+                <motion.button
+                  type="submit"
+                  disabled={isGenerating || !inputText.trim()}
+                  whileHover={{ scale: isGenerating ? 1 : 1.02 }}
+                  whileTap={{ scale: isGenerating ? 1 : 0.98 }}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white text-zinc-900 rounded-lg text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Running
+                    </>
+                  ) : (
+                    <>
+                      Generate
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </motion.button>
+              </form>
+
+              {/* Output strip */}
+              <AnimatePresence>
+                {(generatedTokens.length > 0 || isGenerating) && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-4 py-3 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+                      <span className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mr-3">
+                        Output
+                      </span>
+                      <span className="font-mono text-[13px] text-zinc-300 leading-relaxed">
+                        {displayOutput}
+                      </span>
+                      {isGenerating && (
+                        <motion.span
+                          className="inline-block w-[2px] h-[1em] bg-zinc-400 ml-0.5 align-middle"
+                          animate={{ opacity: [1, 0, 1] }}
+                          transition={{ repeat: Infinity, duration: 0.8 }}
+                        />
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </motion.header>
 
-        {/* MAIN CONTENT AREA */}
-        <div className="flex-1 max-w-7xl mx-auto w-full px-6 pb-6 flex flex-col overflow-hidden">
-          
+        {/* Main */}
+        <div className="flex-1 max-w-[1400px] mx-auto w-full px-6 pb-6 flex flex-col overflow-hidden">
           <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
-            
-            {/* TABS */}
-            <Tabs.List className="flex gap-2 mb-4 bg-transparent">
-              {['pipeline', 'attention', 'embeddings', 'generation'].map(tab => (
+            {/* Tab bar */}
+            <Tabs.List className="flex gap-1 mb-3 p-1 bg-white/[0.02] border border-white/[0.05] rounded-xl w-fit">
+              {TAB_ITEMS.map((tab) => (
                 <Tabs.Trigger
-                  key={tab}
-                  value={tab}
-                  className="px-6 py-2 rounded-full font-medium text-sm transition-all capitalize data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-300 data-[state=active]:border-blue-500/30 border border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
+                  key={tab.id}
+                  value={tab.id}
+                  className="relative px-4 py-2 rounded-lg text-[13px] font-medium text-zinc-500 transition-colors data-[state=active]:text-zinc-100 hover:text-zinc-300"
                 >
-                  {tab}
+                  {activeTab === tab.id && (
+                    <motion.div
+                      layoutId="tab-indicator"
+                      className="absolute inset-0 bg-white/[0.08] rounded-lg border border-white/[0.06]"
+                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">{tab.label}</span>
                 </Tabs.Trigger>
               ))}
             </Tabs.List>
 
-            {/* TAB CONTENTS */}
-            <div className="flex-1 relative min-h-0 bg-[rgba(12,14,28,0.75)] backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
-              
-              <Tabs.Content value="pipeline" className="absolute inset-0 flex flex-col md:flex-row outline-none">
-                <div className="flex-1 relative">
-                  <PipelineCanvas 
-                    selectedStage={selectedStage} 
-                    onSelectStage={setSelectedStage} 
+            {/* Content */}
+            <div className="flex-1 relative min-h-0 bg-white/[0.015] border border-white/[0.06] rounded-2xl overflow-hidden">
+              <Tabs.Content
+                value="pipeline"
+                className="absolute inset-0 outline-none overflow-hidden flex flex-col md:flex-row"
+              >
+                <div
+                  className={`relative min-h-0 transition-all duration-300 ${
+                    selectedStage ? 'flex-1 md:w-[58%] md:flex-none' : 'flex-1 w-full'
+                  }`}
+                >
+                  <PipelineCanvas
+                    selectedStage={selectedStage}
+                    onSelectStage={setSelectedStage}
                     isGenerating={isGenerating}
-                    confidence={0.8} // Mock confidence
+                    flowState={flowState}
                   />
                 </div>
-                <div className="w-full md:w-[400px] h-full border-t md:border-t-0 md:border-l border-white/5">
-                  <DetailPanel 
-                    selectedStage={selectedStage} 
-                    data={currentData} 
-                    onSwitchToAttention={() => setActiveTab('attention')}
-                  />
-                </div>
+
+                <AnimatePresence mode="wait">
+                  {selectedStage ? (
+                    <motion.div
+                      key="detail-panel"
+                      initial={{ opacity: 0, x: 24 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 24 }}
+                      transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                      className="w-full md:w-[42%] md:max-w-[440px] h-[42%] md:h-full flex-shrink-0 border-t md:border-t-0 md:border-l border-white/[0.08] bg-[#09090b]/95 md:bg-transparent"
+                    >
+                      <DetailPanel
+                        selectedStage={selectedStage}
+                        data={currentData}
+                        flowState={flowState}
+                        onClose={() => setSelectedStage(null)}
+                        onSwitchToAttention={() => setActiveTab('attention')}
+                      />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="detail-placeholder"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="hidden md:flex w-[42%] max-w-[440px] flex-shrink-0 border-l border-white/[0.06] items-center justify-center p-8"
+                    >
+                      <p className="text-sm text-zinc-600 text-center leading-relaxed">
+                        Click a stage card to inspect token processing
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </Tabs.Content>
 
               <Tabs.Content value="attention" className="absolute inset-0 flex flex-col outline-none">
-                <div className="flex justify-end p-4 border-b border-white/5">
-                  <button 
-                    onClick={() => setAttentionViewType(prev => prev === '2d' ? '3d' : '2d')}
-                    className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-zinc-300 transition-colors border border-white/10"
+                <div className="flex justify-end p-4 border-b border-white/[0.05]">
+                  <button
+                    onClick={() => setAttentionViewType((p) => (p === '2d' ? '3d' : '2d'))}
+                    className="px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.07] rounded-lg text-[12px] text-zinc-400 transition-colors border border-white/[0.06]"
                   >
-                    Switch to {attentionViewType === '2d' ? '3D Arcs' : '2D Heatmap'}
+                    {attentionViewType === '2d' ? '3D arc view' : '2D heatmap'}
                   </button>
                 </div>
                 <div className="flex-1 relative">
                   {attentionViewType === '2d' ? (
-                    <AttentionHeatmap tokens={tokens} attentionWeights={attentionWeights[0] || []} />
+                    <AttentionHeatmap
+                      tokens={tokens}
+                      attentionWeights={attentionWeights[0] || []}
+                    />
                   ) : (
-                    // We just pass the first head for the 3D view simplification
-                    <AttentionArcView tokens={tokens} attentionMatrix={attentionWeights[0]?.[0] || []} />
+                    <AttentionArcView
+                      tokens={tokens}
+                      attentionMatrix={attentionWeights[0]?.[0] || []}
+                    />
                   )}
                 </div>
               </Tabs.Content>
@@ -214,18 +330,16 @@ export const TransformerViz: React.FC<TransformerVizProps & { onGenerate: (text:
               </Tabs.Content>
 
               <Tabs.Content value="generation" className="absolute inset-0 outline-none">
-                <GenerationView 
-                  generatedTokens={generatedTokens} 
-                  isGenerating={isGenerating} 
-                  topKPredictions={topKPredictions} 
+                <GenerationView
+                  generatedTokens={generatedTokens}
+                  generatedText={generatedText}
+                  isGenerating={isGenerating}
+                  topKPredictions={topKPredictions}
                 />
               </Tabs.Content>
-
             </div>
           </Tabs.Root>
-
         </div>
-
       </div>
     </div>
   );

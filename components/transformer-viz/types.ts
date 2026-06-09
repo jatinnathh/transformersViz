@@ -1,20 +1,22 @@
 export interface TransformerVizProps {
   inputText: string;
-  tokens: string[];                          // ["F","i","r","s","t"]
+  tokens: string[];
   tokenIds: number[];
-  embeddings: number[][];                    // [nTokens][dModel]
+  embeddings: number[][];
   positionalEncodings: number[][];
-  attentionWeights: number[][][][];          // [nLayers][nHeads][nTokens][nTokens]
+  attentionWeights: number[][][][];
   encoderOutputs: number[][];
   decoderOutputs: number[][];
-  logits: number[][];                        // [seqLen][vocabSize]
-  topKPredictions: Array<{token: string; prob: number}[]>;
+  logits: number[][];
+  topKPredictions: Array<{ token: string; prob: number; logit?: number }[]>;
   generatedTokens: string[];
+  generatedText?: string;
   isGenerating: boolean;
-  stageTiming?: Record<string, number>;      // ms per stage (optional)
+  stageTiming?: Record<string, number>;
+  stageDecisions?: TokenStageDecision[];
 }
 
-export type PipelineStage = 
+export type PipelineStage =
   | 'tokenizer'
   | 'embedding'
   | 'positional'
@@ -25,6 +27,39 @@ export type PipelineStage =
 export interface StageInfo {
   id: PipelineStage;
   label: string;
-  color: string; // hex
+  shortLabel: string;
+  accent: string;
+  accentMuted: string;
+  icon: string;
   description: string;
+  technicalNote: string;
 }
+
+export interface TokenStageDecision {
+  stage: PipelineStage;
+  tokenIndex: number;
+  token: string;
+  summary: string;
+  metrics: { label: string; value: string }[];
+  topK?: { token: string; logit: number; prob: number }[];
+  attentionTargets?: { token: string; weight: number }[];
+}
+
+export interface PipelineFlowState {
+  activeStage: PipelineStage | null;
+  activeTokenIndex: number;
+  activeToken: string | null;
+  stageProgress: number;
+  completedStages: PipelineStage[];
+  isFlowing: boolean;
+  currentDecision: TokenStageDecision | null;
+}
+
+export const PIPELINE_STAGES: PipelineStage[] = [
+  'tokenizer',
+  'embedding',
+  'positional',
+  'encoder',
+  'decoder',
+  'output',
+];
