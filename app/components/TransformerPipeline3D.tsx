@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Text, Box } from '@react-three/drei';
+import { OrbitControls, Html, Box } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Binary, 
@@ -133,17 +133,11 @@ function StageBox({ stage, isActive, onClick }: StageBoxProps) {
           metalness={0.3}
         />
       </Box>
-      <Text
-        position={[0, 0, 0.6]}
-        fontSize={0.22}
-        color="white"
-        anchorX="center"
-        anchorY="middle"
-        maxWidth={1.8}
-        textAlign="center"
-      >
-        {stage.name}
-      </Text>
+      <Html position={[0, 0, 0.6]} center transform pointerEvents="none" distanceFactor={10}>
+        <div className="text-white text-base font-bold text-center w-32 drop-shadow-md select-none">
+          {stage.name}
+        </div>
+      </Html>
     </group>
   );
 }
@@ -353,19 +347,13 @@ export default function TransformerPipeline3D({ activeStage, onStageClick }: Tra
       <div className="w-full min-h-[360px] bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-inner flex flex-col justify-center">
         <AnimatePresence mode="wait">
           {viewMode === '3d' && webglSupported ? (
-            <motion.div
-              key="3d-canvas"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="w-full h-[500px]"
-            >
+            <div className="w-full h-[500px] relative">
               <CanvasErrorBoundary 
                 fallback={
-                  <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-4">
+                  <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-4 absolute inset-0 z-10 bg-zinc-50 dark:bg-zinc-950">
                     <AlertCircle className="w-12 h-12 text-amber-500" />
                     <div className="max-w-md">
-                      <h4 className="font-bold text-zinc-900 dark:text-zinc-50">WebGL Crash Detected</h4>
+                      <h4 className="font-bold text-zinc-900 dark:text-zinc-50">WebGL Context Lost</h4>
                       <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">
                         Your browser or graphics driver encountered an error rendering the 3D Canvas.
                         Automatically falling back to 2D view.
@@ -380,7 +368,7 @@ export default function TransformerPipeline3D({ activeStage, onStageClick }: Tra
                   </div>
                 }
               >
-                <Canvas camera={{ position: [0, 6, 16], fov: 45 }}>
+                <Canvas camera={{ position: [0, 6, 16], fov: 45 }} gl={{ preserveDrawingBuffer: true, powerPreference: "high-performance" }} style={{ position: 'absolute', inset: 0 }}>
                   <ambientLight intensity={0.6} />
                   <pointLight position={[10, 15, 10]} intensity={1.2} />
                   <pointLight position={[-10, -10, -10]} intensity={0.4} />
@@ -413,7 +401,7 @@ export default function TransformerPipeline3D({ activeStage, onStageClick }: Tra
                   />
                 </Canvas>
               </CanvasErrorBoundary>
-            </motion.div>
+            </div>
           ) : (
             <motion.div
               key="2d-diagram"
