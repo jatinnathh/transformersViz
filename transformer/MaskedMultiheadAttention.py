@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
+from positionalencoder import RotatoryPositionalEmbedding
 class MaskedMultiHeadedAttention(nn.Module):
-    def __init__(self,embedding_dimension,number_of_heads,dropout=0.1):
+    def __init__(self,rope,embedding_dimension,number_of_heads,dropout=0.1):
+        self.rope = RotatoryPositionalEmbedding(self.head_dimension)
         super().__init__()
         assert embedding_dimension % number_of_heads == 0, \
                 "embedding_dimension must be divisible by number_of_heads"
@@ -20,8 +22,15 @@ class MaskedMultiHeadedAttention(nn.Module):
         return torch.triu(
             torch.full((seq_len, seq_len), -1e9, device=device), diagonal=1
         )
-        
+
     def forward(self, x, mask=None):
+        """
+        Compute the multi head attention.
+
+        x dimensions are: (batch_size, sequence_length, embedding_dimension)
+        mask dimensions are: (batch_size, sequence_length)
+        mask values are: 0 or 1. 0 means the token is masked, 1 means the token is not masked.
+        """
         B, S, E = x.shape
         H = self.number_of_heads
         D = self.head_dimension
@@ -30,6 +39,9 @@ class MaskedMultiHeadedAttention(nn.Module):
         Q = self.query_layer(x).view(B, S, H, D).transpose(1, 2)
         K = self.key_layer(x).view(B, S, H, D).transpose(1, 2)
         V = self.value_layer(x).view(B, S, H, D).transpose(1, 2)
+
+        Q = self.rope.rotate(Q)   # Q shape: (batch, heads, seq, head_dim)
+        K = self.rope.rotate(K)
 
         # Attention weights: (batch, heads, seq_len, seq_len)
         weights = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(D)

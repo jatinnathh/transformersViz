@@ -1,15 +1,15 @@
 import torch
+import math
 
-class TokenEmbedding(torch.nn.module):
-    "pytorch module that converts tokens to embeddings"
-
-    def __init__(self,d_model,tokens):
+class TokenEmbedding(torch.nn.Module):
+    def __init__(self, d_model, vocab_size):
         super().__init__()
-        self.embedding_layer=torch.nn.embedding(
-            num_embeddings=tokens,
-            embedding_dim=d_model
+        self.d_model = d_model
+        self.embedding = torch.nn.Embedding(
+            num_embeddings=vocab_size,
+            embedding_dim=d_model,
+            padding_idx=0        
         )
 
-    def forward(self,x):
-        return self.embedding_layer()
-
+    def forward(self, x):
+        return self.embedding(x) * math.sqrt(self.d_model)
